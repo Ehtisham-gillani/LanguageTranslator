@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">CodeVick Translator</string>
+    <string name="accessibility_description">This service is used to read text from the screen for instant translation when using the floating bubble.</string>
+
+    <!-- UI Strings -->
+    <string name="type_or_paste">Type something to translate...</string>
+    <string name="translate_now">Translate Now</string>
+    <string name="result_label">Result</string>
+    <string name="enable_bubble">Enable Floating Bubble</string>
+    <string name="bubble_active">Bubble Service Active</string>
+    <string name="enable_accessibility">Enable Accessibility First</string>
+    <string name="accessibility_toast">Please enable CodeVick Translator in Accessibility Settings</string>
+    <string name="please_enter_text">Please enter text</string>
+    <string name="permission_denied">Permission denied</string>
+
+    <!-- Bubble Panel -->
+    <string name="smart_translator">Smart Translator</string>
+    <string name="scan_screen">Scan Screen</string>
+    <string name="crop_scan">Crop &amp; Scan</string>
+    <string name="in_place_scan">In-Place</string>
+    <string name="paste_hint">Or paste text manually here...</string>
+    <string name="translate_text">Translate Text</string>
+    <string name="results_hint">Results will appear here...</string>
+    <string name="turn_off_bubble">Turn Off Bubble</string>
+    <string name="no_text_found">No text found on screen. Make sure Accessibility is ON.</string>
+    <string name="error_prefix">Error: %1$s</string>
+    <string name="crop_instruction">Drag the box over text and tap Scan</string>
+    <string name="scanning_overlay">Scanning Screen...</string>
+</resources>

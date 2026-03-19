@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="300dp"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="8dp"
+    app:strokeWidth="0dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:background="#FFFFFF">
+
+        <TextView
+            android:id="@+id/tvTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="@string/smart_translator"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#1F2937"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnBubbleClose"
+            app:layout_constraintHorizontal_bias="0" />
+
+        <ImageButton
+            android:id="@+id/btnBubbleClose"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:contentDescription="@string/turn_off_bubble"
+            app:tint="#6B7280"
+            app:layout_constraintTop_toTopOf="@id/tvTitle"
+            app:layout_constraintBottom_toBottomOf="@id/tvTitle"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Language Selectors -->
+        <LinearLayout
+            android:id="@+id/layoutLanguages"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="12dp"
+            android:background="#F3F4F6"
+            android:padding="4dp"
+            app:layout_constraintTop_toBottomOf="@id/tvTitle"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <Spinner
+                android:id="@+id/spinnerSourceBubble"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@null" />
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@android:drawable/ic_menu_send"
+                android:contentDescription="@null"
+                app:tint="#6366F1" />
+
+            <Spinner
+                android:id="@+id/spinnerTargetBubble"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@null" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnScanScreen"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:text="@string/scan_screen"
+            android:textAllCaps="false"
+            android:textSize="11sp"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_search"
+            app:iconSize="16dp"
+            app:layout_constraintTop_toBottomOf="@id/layoutLanguages"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/btnCropScan"
+            android:layout_marginEnd="2dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCropScan"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:text="@string/crop_scan"
+            android:textAllCaps="false"
+            android:textSize="11sp"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_crop"
+            app:iconSize="16dp"
+            app:layout_constraintTop_toBottomOf="@id/layoutLanguages"
+            app:layout_constraintStart_toEndOf="@id/btnScanScreen"
+            app:layout_constraintEnd_toStartOf="@id/btnInPlace"
+            android:layout_marginHorizontal="2dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnInPlace"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:text="In-Place"
+            android:textAllCaps="false"
+            android:textSize="11sp"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_view"
+            app:iconSize="16dp"
+            app:layout_constraintTop_toBottomOf="@id/layoutLanguages"
+            app:layout_constraintStart_toEndOf="@id/btnCropScan"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginStart="2dp" />
+
+        <View
+            android:id="@+id/divider"
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:background="#E5E7EB"
+            app:layout_constraintTop_toBottomOf="@id/btnScanScreen"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <EditText
+            android:id="@+id/etBubbleInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@null"
+            android:gravity="top"
+            android:hint="@string/paste_hint"
+            android:minLines="1"
+            android:maxLines="3"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine"
+            android:textColor="#374151"
+            android:textSize="14sp"
+            app:layout_constraintTop_toBottomOf="@id/divider"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBubbleTranslate"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/translate_text"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            app:layout_constraintTop_toBottomOf="@id/etBubbleInput"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/nestedScrollOutput"
+            android:layout_width="0dp"
+            android:layout_height="100dp"
+            android:layout_marginTop="12dp"
+            android:background="#F3F4F6"
+            android:padding="8dp"
+            app:layout_constraintTop_toBottomOf="@id/btnBubbleTranslate"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/tvBubbleOutput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/results_hint"
+                android:textColor="#111827"
+                android:textIsSelectable="true"
+                android:textSize="14sp"
+                tools:text="Translated text will appear here..." />
+        </androidx.core.widget.NestedScrollView>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnStopService"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/turn_off_bubble"
+            android:textColor="#EF4444"
+            android:textSize="11sp"
+            app:icon="@android:drawable/ic_menu_delete"
+            app:iconSize="14dp"
+            app:iconTint="#EF4444"
+            app:layout_constraintTop_toBottomOf="@id/nestedScrollOutput"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>
