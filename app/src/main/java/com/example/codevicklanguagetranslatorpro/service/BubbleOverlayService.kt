@@ -1,25 +1,29 @@
 package com.example.codevicklanguagetranslatorpro.service
 
 import android.annotation.SuppressLint
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.PixelFormat
+import android.graphics.Point
 import android.os.Build
 import android.os.IBinder
-import android.util.TypedValue
+import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.example.codevicklanguagetranslatorpro.R
+import com.example.codevicklanguagetranslatorpro.TextTranslationActivity
 import com.example.codevicklanguagetranslatorpro.data.TranslationRepository
 import com.example.codevicklanguagetranslatorpro.databinding.BubbleLayoutBinding
 import com.example.codevicklanguagetranslatorpro.databinding.MiniTranslatorPanelBinding
@@ -28,7 +32,20 @@ import kotlin.math.abs
 
 class BubbleOverlayService : Service() {
 
+    companion object {
+        private const val TAG = "BubbleOverlayService"
+
+        private val OVERLAY_TYPE
+            get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+    }
+
     private lateinit var windowManager: WindowManager
+    private var displayW = 0
+    private var displayH = 0
+
     private var bubbleBinding: BubbleLayoutBinding? = null
     private var panelBinding: MiniTranslatorPanelBinding? = null
     private var cropOverlayView: CropOverlayView? = null
@@ -36,160 +53,115 @@ class BubbleOverlayService : Service() {
     private var inPlaceOverlay: InPlaceTranslationOverlay? = null
     private val repository = TranslationRepository()
 
+    private val systemDialogsReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_CLOSE_SYSTEM_DIALOGS) dismissAllOverlays()
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        measureRealDisplay()
+
+        val filter = IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            registerReceiver(systemDialogsReceiver, filter, Context.RECEIVER_EXPORTED)
+        else
+            registerReceiver(systemDialogsReceiver, filter)
+
         startForegroundService()
         showBubble()
     }
 
-    private fun startForegroundService() {
-        val channelId = "bubble_service_channel"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Translator Bubble Service",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+    private fun measureRealDisplay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val b = windowManager.currentWindowMetrics.bounds
+            displayW = b.width(); displayH = b.height()
+        } else {
+            val p = Point()
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.getRealSize(p)
+            displayW = p.x; displayH = p.y
         }
-
-        val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(getString(R.string.bubble_active))
-            .setSmallIcon(android.R.drawable.ic_menu_send)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-
-        startForeground(1, notification)
+        Log.d(TAG, "Display: ${displayW}x$displayH")
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try { unregisterReceiver(systemDialogsReceiver) } catch (_: Exception) {}
+        bubbleBinding?.let { if (it.root.isAttachedToWindow) windowManager.removeView(it.root) }
+        dismissAllOverlays()
+        repository.close()
+    }
+
+    private fun startForegroundService() {
+        val ch = "bubble_service_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(NotificationChannel(ch, "Translator", NotificationManager.IMPORTANCE_LOW))
+        startForeground(1, NotificationCompat.Builder(this, ch)
+            .setContentTitle("Translator Active")
+            .setSmallIcon(android.R.drawable.ic_menu_send).build())
+    }
+
+    // ── Bubble ────────────────────────────────────────────────────────────────
 
     @SuppressLint("ClickableViewAccessibility")
     private fun showBubble() {
-        val themedContext = ContextThemeWrapper(this, R.style.Theme_CodeVickLanguageTranslatorPro)
-        bubbleBinding = BubbleLayoutBinding.inflate(LayoutInflater.from(themedContext))
+        val ctx = ContextThemeWrapper(this, R.style.Theme_CodeVickLanguageTranslatorPro)
+        bubbleBinding = BubbleLayoutBinding.inflate(LayoutInflater.from(ctx))
 
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 200
-        }
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            OVERLAY_TYPE, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START; x = 0; y = 500 }
 
         bubbleBinding?.root?.setOnTouchListener(object : View.OnTouchListener {
-            private var lastAction: Int = 0
-            private var initialX: Int = 0
-            private var initialY: Int = 0
-            private var initialTouchX: Float = 0f
-            private var initialTouchY: Float = 0f
-
-            override fun onTouch(v: View, event: MotionEvent): Boolean {
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = params.x
-                        initialY = params.y
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        lastAction = event.action
-                        return true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        val diffX = abs(event.rawX - initialTouchX)
-                        val diffY = abs(event.rawY - initialTouchY)
-                        if (diffX < 10 && diffY < 10) {
-                            showPanel()
-                        }
-                        lastAction = event.action
-                        return true
-                    }
+            private var iX = 0; private var iY = 0
+            private var iTX = 0f; private var iTY = 0f; private var moved = false
+            override fun onTouch(v: View, e: MotionEvent): Boolean {
+                when (e.action) {
+                    MotionEvent.ACTION_DOWN -> { iX = params.x; iY = params.y; iTX = e.rawX; iTY = e.rawY; moved = false }
+                    MotionEvent.ACTION_UP   -> { if (!moved) showPanel() }
                     MotionEvent.ACTION_MOVE -> {
-                        params.x = initialX + (event.rawX - initialTouchX).toInt()
-                        params.y = initialY + (event.rawY - initialTouchY).toInt()
-                        windowManager.updateViewLayout(bubbleBinding?.root, params)
-                        lastAction = event.action
-                        return true
+                        val dx = (e.rawX - iTX).toInt(); val dy = (e.rawY - iTY).toInt()
+                        if (abs(dx) > 10 || abs(dy) > 10) {
+                            moved = true; params.x = iX + dx; params.y = iY + dy
+                            windowManager.updateViewLayout(bubbleBinding?.root, params)
+                        }
                     }
                 }
-                return false
+                return true
             }
         })
-
         windowManager.addView(bubbleBinding?.root, params)
     }
 
+    // ── Panel ─────────────────────────────────────────────────────────────────
+
     private fun showPanel() {
         if (panelBinding != null) return
-
-        val themedContext = ContextThemeWrapper(this, R.style.Theme_CodeVickLanguageTranslatorPro)
-        panelBinding = MiniTranslatorPanelBinding.inflate(LayoutInflater.from(themedContext))
-
-        setupBubbleSpinners(themedContext)
-
-        val widthPx = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP, 300f, resources.displayMetrics
-        ).toInt()
-
+        val ctx = ContextThemeWrapper(this, R.style.Theme_CodeVickLanguageTranslatorPro)
+        panelBinding = MiniTranslatorPanelBinding.inflate(LayoutInflater.from(ctx))
         val params = WindowManager.LayoutParams(
-            widthPx,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            OVERLAY_TYPE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                    or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                    or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.CENTER
-        }
+        ).apply { gravity = Gravity.CENTER }
 
-        panelBinding?.btnScanScreen?.setOnClickListener {
-            val screenText = ScreenTextService.getTextFromScreen()
-            if (screenText.isNotEmpty()) {
-                panelBinding?.etBubbleInput?.setText(screenText)
-                translateText(screenText)
-            } else {
-                panelBinding?.tvBubbleOutput?.text = getString(R.string.no_text_found)
-            }
-        }
-
-        panelBinding?.btnCropScan?.setOnClickListener {
-            showCropOverlay()
-        }
-
-        panelBinding?.btnInPlace?.setOnClickListener {
-            startInPlaceTranslation()
-        }
-
-        panelBinding?.btnBubbleTranslate?.setOnClickListener {
-            val text = panelBinding?.etBubbleInput?.text.toString()
-            if (text.isNotEmpty()) {
-                translateText(text)
-            }
-        }
-
-        panelBinding?.btnBubbleClose?.setOnClickListener {
-            removePanel()
-        }
-
-        panelBinding?.btnStopService?.setOnClickListener {
-            stopSelf()
-        }
-
+        panelBinding?.btnInPlace?.setOnClickListener   { startInPlaceTranslation() }
+        panelBinding?.btnCropScan?.setOnClickListener  { showCropOverlay() }
+        panelBinding?.btnBubbleClose?.setOnClickListener { stopSelf() }
         windowManager.addView(panelBinding?.root, params)
     }
+
+    // ── In-place ──────────────────────────────────────────────────────────────
 
     private fun startInPlaceTranslation() {
         val elements = ScreenTextService.getTextElementsFromScreen()
@@ -197,198 +169,113 @@ class BubbleOverlayService : Service() {
             Toast.makeText(this, "No text detected on screen", Toast.LENGTH_SHORT).show()
             return
         }
-        
-        val source = getLangCode(panelBinding?.spinnerSourceBubble?.selectedItem?.toString() ?: "English")
-        val target = getLangCode(panelBinding?.spinnerTargetBubble?.selectedItem?.toString() ?: "Spanish")
-        
         removePanel()
-        showInPlaceOverlay()
+        showInPlaceOverlayView()
         inPlaceOverlay?.startScanning()
-        
-        val translatedList = mutableListOf<InPlaceTranslationOverlay.TranslatedElement>()
-        var processedCount = 0
-        
-        for (element in elements) {
-            repository.translate(element.text, source, target, 
-                onSuccess = { translated ->
-                    translatedList.add(InPlaceTranslationOverlay.TranslatedElement(translated, element.text, element.bounds))
-                    processedCount++
-                    if (processedCount == elements.size) {
-                        inPlaceOverlay?.updateTranslations(translatedList)
-                    }
+
+        val result = mutableListOf<InPlaceTranslationOverlay.TranslatedElement>()
+        fun next(i: Int) {
+            if (i >= elements.size) { inPlaceOverlay?.updateTranslations(result); return }
+            val el = elements[i]
+            repository.translate(el.text, TranslateLanguage.ENGLISH, TranslateLanguage.SPANISH,
+                onSuccess = { t ->
+                    result.add(InPlaceTranslationOverlay.TranslatedElement(t, el.text, el.bounds))
+                    next(i + 1)
                 },
-                onError = {
-                    processedCount++
-                    if (processedCount == elements.size) {
-                        inPlaceOverlay?.updateTranslations(translatedList)
-                    }
-                }
-            )
+                onError = { next(i + 1) })
         }
+        next(0)
     }
 
-    private fun showInPlaceOverlay() {
+    private fun showInPlaceOverlayView() {
         if (inPlaceOverlay != null) return
-        inPlaceOverlay = InPlaceTranslationOverlay(this).apply {
-            setOnClickListener { 
-                if (this.isAttachedToWindow) {
-                    windowManager.removeView(this)
-                }
-                inPlaceOverlay = null
-                showPanel()
+
+        inPlaceOverlay = InPlaceTranslationOverlay(this).also { ov ->
+            ov.realDisplayWidth  = displayW
+            ov.realDisplayHeight = displayH
+
+            // ↓ Switch to true, run once, take screenshot, then set back to false
+            ov.debugMode = false
+
+            ov.setOnClickListener { dismissAllOverlays(); showPanel() }
+            ov.isFocusableInTouchMode = true
+            ov.setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+                    dismissAllOverlays(); showPanel(); true
+                } else false
             }
         }
-        
+
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or 
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or 
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            displayW,
+            displayH,
+            OVERLAY_TYPE,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                    or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 0
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
+            x = 0; y = 0
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED
         }
+
         windowManager.addView(inPlaceOverlay, params)
+        inPlaceOverlay?.post { inPlaceOverlay?.requestFocus() }
     }
 
-    private fun setupBubbleSpinners(context: ContextThemeWrapper) {
-        val languages = listOf("English", "Spanish", "French", "German", "Urdu", "Arabic", "Hindi")
-        val adapter = ArrayAdapter(context, R.layout.spinner_item, languages)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        
-        panelBinding?.spinnerSourceBubble?.adapter = adapter
-        panelBinding?.spinnerTargetBubble?.adapter = adapter
-        
-        panelBinding?.spinnerSourceBubble?.setSelection(0)
-        panelBinding?.spinnerTargetBubble?.setSelection(1)
-    }
+    // ── Crop ──────────────────────────────────────────────────────────────────
 
     private fun showCropOverlay() {
         if (cropOverlayView != null) return
         removePanel()
+        val ctx = ContextThemeWrapper(this, R.style.Theme_CodeVickLanguageTranslatorPro)
+        cropOverlayView = CropOverlayView(ctx)
 
-        val themedContext = ContextThemeWrapper(this, R.style.Theme_CodeVickLanguageTranslatorPro)
-        cropOverlayView = CropOverlayView(themedContext)
-        
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
+        val ovParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+            OVERLAY_TYPE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
-        }
+            PixelFormat.TRANSLUCENT)
 
-        val controls = LayoutInflater.from(themedContext).inflate(R.layout.crop_scan_button, null)
+        val controls = LayoutInflater.from(ctx).inflate(R.layout.crop_scan_button, null)
         val btnParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            y = 100
-        }
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            OVERLAY_TYPE, WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; y = 150 }
 
         controls.findViewById<View>(R.id.btnConfirmCrop).setOnClickListener {
             val text = ScreenTextService.getTextFromScreen(cropOverlayView?.cropRect)
-            removeCropOverlay()
-            showPanel()
-            if (text.isNotEmpty()) {
-                panelBinding?.etBubbleInput?.setText(text)
-                translateText(text)
-            }
+            removeCropOverlay(); showPanel()
+            if (!text.isNullOrEmpty()) startActivity(
+                Intent(this, TextTranslationActivity::class.java)
+                    .putExtra("EXTRA_TEXT", text).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
+        controls.findViewById<View>(R.id.btnCancelCrop).setOnClickListener { removeCropOverlay(); showPanel() }
 
-        controls.findViewById<View>(R.id.btnCancelCrop).setOnClickListener {
-            removeCropOverlay()
-            showPanel()
-        }
-
-        windowManager.addView(cropOverlayView, params)
+        windowManager.addView(cropOverlayView, ovParams)
         windowManager.addView(controls, btnParams)
         cropControlView = controls
     }
 
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun dismissAllOverlays() {
+        inPlaceOverlay?.let { if (it.isAttachedToWindow) windowManager.removeView(it) }
+        inPlaceOverlay = null
+        removeCropOverlay(); removePanel()
+    }
+
     private fun removeCropOverlay() {
-        cropOverlayView?.let { 
-            if (it.isAttachedToWindow) windowManager.removeView(it) 
-        }
-        cropControlView?.let { 
-            if (it.isAttachedToWindow) windowManager.removeView(it) 
-        }
-        cropOverlayView = null
-        cropControlView = null
-    }
-
-    private fun translateText(text: String) {
-        val sourceStr = panelBinding?.spinnerSourceBubble?.selectedItem?.toString() ?: "English"
-        val targetStr = panelBinding?.spinnerTargetBubble?.selectedItem?.toString() ?: "Spanish"
-        
-        repository.translate(
-            text,
-            getLangCode(sourceStr),
-            getLangCode(targetStr),
-            onSuccess = { panelBinding?.tvBubbleOutput?.text = it },
-            onError = { panelBinding?.tvBubbleOutput?.text = getString(R.string.error_prefix, it.message) }
-        )
-    }
-
-    private fun getLangCode(lang: String): String {
-        return when (lang) {
-            "English" -> TranslateLanguage.ENGLISH
-            "Spanish" -> TranslateLanguage.SPANISH
-            "French" -> TranslateLanguage.FRENCH
-            "German" -> TranslateLanguage.GERMAN
-            "Urdu" -> TranslateLanguage.URDU
-            "Arabic" -> TranslateLanguage.ARABIC
-            "Hindi" -> TranslateLanguage.HINDI
-            else -> TranslateLanguage.ENGLISH
-        }
+        cropOverlayView?.let { if (it.isAttachedToWindow) windowManager.removeView(it) }
+        cropControlView?.let { if (it.isAttachedToWindow) windowManager.removeView(it) }
+        cropOverlayView = null; cropControlView = null
     }
 
     private fun removePanel() {
-        panelBinding?.let {
-            if (it.root.isAttachedToWindow) {
-                windowManager.removeView(it.root)
-            }
-            panelBinding = null
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        bubbleBinding?.let { 
-            if (it.root.isAttachedToWindow) {
-                windowManager.removeView(it.root) 
-            }
-        }
-        removePanel()
-        removeCropOverlay()
-        inPlaceOverlay?.let { if (it.isAttachedToWindow) windowManager.removeView(it) }
-        repository.close()
+        panelBinding?.let { if (it.root.isAttachedToWindow) windowManager.removeView(it.root) }
+        panelBinding = null
     }
 }

@@ -4,12 +4,16 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
+import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
+import com.example.codevicklanguagetranslatorpro.data.TranslationRepository
 import com.example.codevicklanguagetranslatorpro.databinding.ActivityMainBinding
 import com.example.codevicklanguagetranslatorpro.service.BubbleOverlayService
 import com.example.codevicklanguagetranslatorpro.service.ScreenTextService
@@ -20,6 +24,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: TranslationViewModel by viewModels()
+    private val repository = TranslationRepository()
 
     private val overlayPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -36,12 +41,22 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        setSupportActionBar(binding.toolbar)
-        supportActionBar?.setDisplayShowTitleEnabled(false)
-
         setupSpinners()
         setupListeners()
         observeViewModel()
+        
+        // Background download all models on startup to ensure zero delay
+        downloadAllModels()
+    }
+
+    private fun downloadAllModels() {
+        val allLangs = listOf(
+            TranslateLanguage.ENGLISH, TranslateLanguage.SPANISH, 
+            TranslateLanguage.FRENCH, TranslateLanguage.GERMAN, 
+            TranslateLanguage.URDU, TranslateLanguage.ARABIC, 
+            TranslateLanguage.HINDI
+        )
+        allLangs.forEach { repository.downloadModel(it) }
     }
 
     override fun onResume() {
@@ -51,15 +66,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateAccessibilityStatus() {
         if (isAccessibilityServiceEnabled()) {
-            binding.btnStartBubble.text = getString(R.string.bubble_active)
-            binding.btnStartBubble.alpha = 1.0f
-        } else {
-            binding.btnStartBubble.text = getString(R.string.enable_accessibility)
+            Log.d("MainActivity", "Accessibility Service is active")
         }
     }
 
     private fun setupSpinners() {
-        val languages = listOf("English", "Spanish", "French", "German", "Urdu", "Arabic", "Hindi")
+        val languages = listOf("EN", "ES", "FR", "DE", "UR", "AR", "HI")
         val adapter = ArrayAdapter(this, R.layout.spinner_item, languages)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         
@@ -67,23 +79,35 @@ class MainActivity : AppCompatActivity() {
         binding.spinnerTarget.adapter = adapter
         
         binding.spinnerSource.setSelection(0)
-        binding.spinnerTarget.setSelection(1)
+        binding.spinnerTarget.setSelection(4) // UR
     }
 
     private fun setupListeners() {
-        binding.btnTranslate.setOnClickListener {
-            val text = binding.etInput.text.toString().trim()
-            if (text.isEmpty()) {
-                binding.etInput.error = getString(R.string.please_enter_text)
-                return@setOnClickListener
-            }
-            
-            val source = getLangCode(binding.spinnerSource.selectedItem.toString())
-            val target = getLangCode(binding.spinnerTarget.selectedItem.toString())
-            viewModel.translate(text, source, target)
+        val openTextTranslation = {
+            val intent = Intent(this, TextTranslationActivity::class.java)
+            val currentText = binding.etInput.text.toString()
+            intent.putExtra("EXTRA_TEXT", currentText)
+            startActivity(intent)
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         }
 
-        binding.btnStartBubble.setOnClickListener {
+        binding.cardInput.setOnClickListener { openTextTranslation() }
+        binding.etInput.isFocusable = false
+        binding.etInput.isClickable = true
+        binding.etInput.setOnClickListener { openTextTranslation() }
+
+        binding.btnTranslate.setOnClickListener {
+            val text = binding.etInput.text.toString().trim()
+            if (text.isNotEmpty()) {
+                val source = getLangCode(binding.spinnerSource.selectedItem.toString())
+                val target = getLangCode(binding.spinnerTarget.selectedItem.toString())
+                viewModel.translate(text, source, target)
+            } else {
+                openTextTranslation()
+            }
+        }
+
+        binding.btnStartBubbleMain.setOnClickListener {
             if (!isAccessibilityServiceEnabled()) {
                 openAccessibilitySettings()
             } else {
@@ -103,30 +127,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openAccessibilitySettings() {
-        Toast.makeText(this, getString(R.string.accessibility_toast), Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Please enable Accessibility Service for Screen Translation", Toast.LENGTH_LONG).show()
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         startActivity(intent)
     }
 
     private fun observeViewModel() {
         viewModel.translatedText.observe(this) { result ->
-            binding.tvOutput.text = result
-        }
-
-        viewModel.error.observe(this) { errorMsg ->
-            Toast.makeText(this, errorMsg, Toast.LENGTH_SHORT).show()
+            if (result.isNotEmpty()) {
+                binding.etInput.setText(result)
+            }
         }
     }
 
     private fun getLangCode(lang: String): String {
         return when (lang) {
-            "English" -> TranslateLanguage.ENGLISH
-            "Spanish" -> TranslateLanguage.SPANISH
-            "French" -> TranslateLanguage.FRENCH
-            "German" -> TranslateLanguage.GERMAN
-            "Urdu" -> TranslateLanguage.URDU
-            "Arabic" -> TranslateLanguage.ARABIC
-            "Hindi" -> TranslateLanguage.HINDI
+            "EN" -> TranslateLanguage.ENGLISH
+            "ES" -> TranslateLanguage.SPANISH
+            "FR" -> TranslateLanguage.FRENCH
+            "DE" -> TranslateLanguage.GERMAN
+            "UR" -> TranslateLanguage.URDU
+            "AR" -> TranslateLanguage.ARABIC
+            "HI" -> TranslateLanguage.HINDI
             else -> TranslateLanguage.ENGLISH
         }
     }
@@ -150,5 +172,10 @@ class MainActivity : AppCompatActivity() {
         } else {
             startService(intent)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        repository.close()
     }
 }

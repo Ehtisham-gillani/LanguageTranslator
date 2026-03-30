@@ -3,6 +3,7 @@ package com.example.codevicklanguagetranslatorpro.service
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
 import android.graphics.RectF
+import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.concurrent.atomic.AtomicReference
 
@@ -11,89 +12,142 @@ data class TextElement(val text: String, val bounds: Rect)
 class ScreenTextService : AccessibilityService() {
 
     companion object {
+        private const val TAG = "ScreenTextService"
         private val instance = AtomicReference<ScreenTextService?>()
 
+        fun isServiceRunning(): Boolean = instance.get() != null
+
         fun getTextElementsFromScreen(cropRect: RectF? = null): List<TextElement> {
-            val service = instance.get() ?: return emptyList()
-            val elements = mutableListOf<TextElement>()
-            
-            // Use rootInActiveWindow as the primary source for better accuracy and performance
-            service.rootInActiveWindow?.let { root ->
-                collectStrictLeafNodes(root, elements, service.packageName, cropRect)
+            val service = instance.get() ?: run {
+                Log.e(TAG, "Service not running")
+                return emptyList()
             }
-            
-            // If no elements found, try all windows as a fallback
-            if (elements.isEmpty()) {
-                val windows = service.windows
-                if (!windows.isNullOrEmpty()) {
-                    for (window in windows) {
-                        val root = window.root ?: continue
-                        if (root.packageName != service.packageName) {
-                            collectStrictLeafNodes(root, elements, service.packageName, cropRect)
-                        }
+
+            val raw = mutableListOf<TextElement>()
+            val myPkg = service.packageName?.toString() ?: ""
+
+            val root = service.rootInActiveWindow
+            if (root != null) {
+                collectTextNodes(root, raw, myPkg, cropRect)
+                root.recycle()
+            } else {
+                service.windows?.forEach { win ->
+                    win.root?.let { r ->
+                        collectTextNodes(r, raw, myPkg, cropRect)
+                        r.recycle()
                     }
                 }
             }
-            return elements
+
+            Log.d(TAG, "Raw nodes: ${raw.size}")
+            raw.forEach { Log.d(TAG, "  [${it.bounds.left},${it.bounds.top},${it.bounds.right},${it.bounds.bottom}] \"${it.text.take(30)}\"") }
+
+            val deduped = removeSupersets(raw)
+            Log.d(TAG, "After dedup: ${deduped.size}")
+            return deduped
         }
 
-        private fun collectStrictLeafNodes(
-            node: AccessibilityNodeInfo?, 
-            elements: MutableList<TextElement>, 
-            myPackage: CharSequence,
+        /**
+         * Collect only VISIBLE text-bearing nodes.
+         *
+         * Strategy:
+         *  - Walk the full tree
+         *  - A node is "text-bearing" if it has non-blank text AND is either:
+         *      (a) a leaf (childCount == 0), OR
+         *      (b) none of its direct children carry the same text
+         *        (avoids duplicating parent labels that mirror a child's text)
+         *  - Never collect from our own package
+         */
+        private fun collectTextNodes(
+            node: AccessibilityNodeInfo?,
+            out: MutableList<TextElement>,
+            myPkg: String,
             cropRect: RectF?
         ) {
             if (node == null) return
-            
-            try {
-                // Only process visible nodes from other applications
-                if (node.packageName != myPackage && node.isVisibleToUser) {
-                    val text = node.text?.toString()
-                    
-                    // Focus on leaf nodes (no children) which usually represent individual text elements
-                    if (!text.isNullOrBlank() && node.childCount == 0) {
-                        val bounds = Rect()
-                        node.getBoundsInScreen(bounds)
-                        
-                        // Sanity check for valid bounds
-                        if (bounds.width() > 5 && bounds.height() > 5) {
-                            if (cropRect == null || RectF.intersects(cropRect, RectF(bounds))) {
-                                // Avoid adding the exact same element twice
-                                if (elements.none { it.bounds == bounds && it.text == text }) {
-                                    elements.add(TextElement(text, bounds))
-                                }
-                            }
+            if (!node.isVisibleToUser) { node.recycle(); return }
+            if (node.packageName?.toString() == myPkg) { node.recycle(); return }
+
+            val text = node.text?.toString()?.trim()
+                ?.takeIf { it.isNotBlank() }
+
+            if (text != null) {
+                val childCount = node.childCount
+
+                // Check if any direct child already has this exact text
+                var childHasSameText = false
+                for (i in 0 until childCount) {
+                    val child = node.getChild(i) ?: continue
+                    val childText = child.text?.toString()?.trim()
+                    child.recycle()
+                    if (childText == text) { childHasSameText = true; break }
+                }
+
+                if (!childHasSameText) {
+                    val bounds = Rect()
+                    node.getBoundsInScreen(bounds)
+                    if (bounds.width() > 5 && bounds.height() > 5) {
+                        if (cropRect == null || RectF.intersects(cropRect, RectF(bounds))) {
+                            out.add(TextElement(text, Rect(bounds)))
                         }
                     }
                 }
-                
-                for (i in 0 until node.childCount) {
-                    val child = node.getChild(i)
-                    if (child != null) {
-                        collectStrictLeafNodes(child, elements, myPackage, cropRect)
-                        // Child nodes should be recycled to avoid memory issues in AccessibilityServices
-                        child.recycle()
-                    }
+
+                // Always recurse into children
+                for (i in 0 until childCount) {
+                    collectTextNodes(node.getChild(i), out, myPkg, cropRect)
                 }
-            } catch (e: Exception) {
-                // Ignore errors from invalid or recycled nodes
+            } else {
+                // No text on this node — still recurse
+                val childCount = node.childCount
+                for (i in 0 until childCount) {
+                    collectTextNodes(node.getChild(i), out, myPkg, cropRect)
+                }
+                node.recycle()
             }
         }
-        
-        fun getTextFromScreen(cropRect: RectF? = null): String {
-            return getTextElementsFromScreen(cropRect).joinToString("\n") { it.text }
+
+        /**
+         * Remove any element whose bounds are a SUPERSET of another element
+         * with the same text — keep the smallest (most specific) bounds.
+         *
+         * Also remove near-duplicates: same text, center within 8px of another.
+         */
+        private fun removeSupersets(elements: List<TextElement>): List<TextElement> {
+            if (elements.size <= 1) return elements
+
+            val kept = mutableListOf<TextElement>()
+
+            outer@ for (candidate in elements) {
+                for (other in elements) {
+                    if (other === candidate) continue
+                    if (other.text == candidate.text && candidate.bounds.contains(other.bounds)) {
+                        // candidate is larger — skip it, keep the smaller 'other'
+                        continue@outer
+                    }
+                }
+                kept.add(candidate)
+            }
+
+            // Final pass: deduplicate by (text + approximate center)
+            val seen = mutableSetOf<String>()
+            return kept.filter { el ->
+                val key = "${el.text}|${el.bounds.centerX() / 6}|${el.bounds.centerY() / 6}"
+                seen.add(key)
+            }
         }
+
+        fun getTextFromScreen(cropRect: RectF? = null): String =
+            getTextElementsFromScreen(cropRect).joinToString("\n") { it.text }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        Log.d(TAG, "Connected")
         instance.set(this)
     }
 
     override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {}
     override fun onInterrupt() { instance.set(null) }
-    override fun onDestroy() {
-        super.onDestroy()
-        instance.set(null)
-    }
+    override fun onDestroy() { super.onDestroy(); instance.set(null) }
 }
