@@ -9,6 +9,8 @@ import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
+import androidx.core.graphics.toColorInt
+import androidx.core.graphics.withTranslation
 import kotlin.math.max
 import kotlin.math.min
 
@@ -67,18 +69,18 @@ class InPlaceTranslationOverlay @JvmOverloads constructor(
     }
 
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#6366F1")
+        color = "#6366F1".toColorInt()
         style = Paint.Style.STROKE
         strokeWidth = 1.8f
     }
 
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color    = Color.parseColor("#111827")
+        color    = "#111827".toColorInt()
         typeface = Typeface.create("sans-serif", Typeface.NORMAL)
     }
 
     private val scanLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color       = Color.parseColor("#6366F1")
+        color       = "#6366F1".toColorInt()
         strokeWidth = 4f
         style       = Paint.Style.STROKE
         alpha       = 180
@@ -215,10 +217,9 @@ class InPlaceTranslationOverlay @JvmOverloads constructor(
             canvas.drawRoundRect(boxRect, r, r, borderPaint)
 
             // ── 5. Draw translated text — left-aligned inside box ─────────
-            canvas.save()
-            canvas.translate(boxRect.left + hPad, boxTop + vPad)
-            layout.draw(canvas)
-            canvas.restore()
+            canvas.withTranslation(boxRect.left + hPad, boxTop + vPad) {
+                layout.draw(this)
+            }
         }
     }
 

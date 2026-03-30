@@ -6,6 +6,8 @@ import android.graphics.*
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import androidx.core.graphics.toColorInt
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -14,19 +16,19 @@ class CropOverlayView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#806366F1")
+        color = "#806366F1".toColorInt()
         style = Paint.Style.STROKE
         strokeWidth = 5f
         pathEffect = DashPathEffect(floatArrayOf(10f, 10f), 0f)
     }
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#206366F1")
+        color = "#206366F1".toColorInt()
         style = Paint.Style.FILL
     }
 
     private val bgPaint = Paint().apply {
-        color = Color.parseColor("#40000000")
+        color = "#40000000".toColorInt()
         style = Paint.Style.FILL
     }
 
@@ -64,7 +66,7 @@ class CropOverlayView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 lastX = x
                 lastY = y
-                val distToBottomRight = Math.hypot((x - cropRect.right).toDouble(), (y - cropRect.bottom).toDouble())
+                val distToBottomRight = hypot(x - cropRect.right, y - cropRect.bottom)
                 if (distToBottomRight < handleSize * 2) {
                     isResizing = true
                 } else if (cropRect.contains(x, y)) {

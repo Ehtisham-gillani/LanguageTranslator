@@ -1,6 +1,7 @@
 package com.example.codevicklanguagetranslatorpro.service
 
 import android.accessibilityservice.AccessibilityService
+import android.annotation.SuppressLint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.util.Log
@@ -9,13 +10,12 @@ import java.util.concurrent.atomic.AtomicReference
 
 data class TextElement(val text: String, val bounds: Rect)
 
+@SuppressLint("AccessibilityPolicy")
 class ScreenTextService : AccessibilityService() {
 
     companion object {
         private const val TAG = "ScreenTextService"
         private val instance = AtomicReference<ScreenTextService?>()
-
-        fun isServiceRunning(): Boolean = instance.get() != null
 
         fun getTextElementsFromScreen(cropRect: RectF? = null): List<TextElement> {
             val service = instance.get() ?: run {
@@ -24,17 +24,15 @@ class ScreenTextService : AccessibilityService() {
             }
 
             val raw = mutableListOf<TextElement>()
-            val myPkg = service.packageName?.toString() ?: ""
+            val myPkg = service.packageName ?: ""
 
             val root = service.rootInActiveWindow
             if (root != null) {
                 collectTextNodes(root, raw, myPkg, cropRect)
-                root.recycle()
             } else {
                 service.windows?.forEach { win ->
                     win.root?.let { r ->
                         collectTextNodes(r, raw, myPkg, cropRect)
-                        r.recycle()
                     }
                 }
             }
@@ -65,8 +63,8 @@ class ScreenTextService : AccessibilityService() {
             cropRect: RectF?
         ) {
             if (node == null) return
-            if (!node.isVisibleToUser) { node.recycle(); return }
-            if (node.packageName?.toString() == myPkg) { node.recycle(); return }
+            if (!node.isVisibleToUser) return
+            if (node.packageName?.toString() == myPkg) return
 
             val text = node.text?.toString()?.trim()
                 ?.takeIf { it.isNotBlank() }
@@ -79,7 +77,6 @@ class ScreenTextService : AccessibilityService() {
                 for (i in 0 until childCount) {
                     val child = node.getChild(i) ?: continue
                     val childText = child.text?.toString()?.trim()
-                    child.recycle()
                     if (childText == text) { childHasSameText = true; break }
                 }
 
@@ -103,7 +100,6 @@ class ScreenTextService : AccessibilityService() {
                 for (i in 0 until childCount) {
                     collectTextNodes(node.getChild(i), out, myPkg, cropRect)
                 }
-                node.recycle()
             }
         }
 

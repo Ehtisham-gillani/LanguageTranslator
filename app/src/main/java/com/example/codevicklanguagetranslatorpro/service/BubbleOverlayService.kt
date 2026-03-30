@@ -22,10 +22,12 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.codevicklanguagetranslatorpro.R
 import com.example.codevicklanguagetranslatorpro.TextTranslationActivity
 import com.example.codevicklanguagetranslatorpro.data.TranslationRepository
 import com.example.codevicklanguagetranslatorpro.databinding.BubbleLayoutBinding
+import com.example.codevicklanguagetranslatorpro.databinding.CropScanButtonBinding
 import com.example.codevicklanguagetranslatorpro.databinding.MiniTranslatorPanelBinding
 import com.google.mlkit.nl.translate.TranslateLanguage
 import kotlin.math.abs
@@ -55,6 +57,7 @@ class BubbleOverlayService : Service() {
 
     private val systemDialogsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            @Suppress("DEPRECATION")
             if (intent?.action == Intent.ACTION_CLOSE_SYSTEM_DIALOGS) dismissAllOverlays()
         }
     }
@@ -66,11 +69,11 @@ class BubbleOverlayService : Service() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         measureRealDisplay()
 
+        @Suppress("DEPRECATION")
         val filter = IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-            registerReceiver(systemDialogsReceiver, filter, Context.RECEIVER_EXPORTED)
-        else
-            registerReceiver(systemDialogsReceiver, filter)
+        ContextCompat.registerReceiver(
+            this, systemDialogsReceiver, filter, ContextCompat.RECEIVER_EXPORTED
+        )
 
         startForegroundService()
         showBubble()
@@ -240,20 +243,21 @@ class BubbleOverlayService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT)
 
-        val controls = LayoutInflater.from(ctx).inflate(R.layout.crop_scan_button, null)
+        val cropControlBinding = CropScanButtonBinding.inflate(LayoutInflater.from(ctx))
+        val controls = cropControlBinding.root
         val btnParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             OVERLAY_TYPE, WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT
         ).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; y = 150 }
 
-        controls.findViewById<View>(R.id.btnConfirmCrop).setOnClickListener {
+        cropControlBinding.btnConfirmCrop.setOnClickListener {
             val text = ScreenTextService.getTextFromScreen(cropOverlayView?.cropRect)
             removeCropOverlay(); showPanel()
-            if (!text.isNullOrEmpty()) startActivity(
+            if (text.isNotEmpty()) startActivity(
                 Intent(this, TextTranslationActivity::class.java)
                     .putExtra("EXTRA_TEXT", text).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
-        controls.findViewById<View>(R.id.btnCancelCrop).setOnClickListener { removeCropOverlay(); showPanel() }
+        cropControlBinding.btnCancelCrop.setOnClickListener { removeCropOverlay(); showPanel() }
 
         windowManager.addView(cropOverlayView, ovParams)
         windowManager.addView(controls, btnParams)

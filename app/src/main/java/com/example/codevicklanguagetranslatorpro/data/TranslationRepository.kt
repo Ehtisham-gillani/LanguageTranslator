@@ -3,7 +3,6 @@ package com.example.codevicklanguagetranslatorpro.data
 import android.util.Log
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
-import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
@@ -21,26 +20,34 @@ class TranslationRepository {
     private val modelManager = RemoteModelManager.getInstance()
 
     /**
-     * Pre-downloads a language model in the background.
+     * Pre-downloads a language model in the background if not already present.
      */
     fun downloadModel(langCode: String, onComplete: (Boolean) -> Unit = {}) {
-        Log.d(TAG, "Background download started for: $langCode")
-        val model = TranslateRemoteModel.Builder(langCode).build()
-        val conditions = DownloadConditions.Builder().build() // Allow cellular
-
-        modelManager.download(model, conditions)
-            .addOnSuccessListener {
-                Log.d(TAG, "Model download successful: $langCode")
+        isModelDownloaded(langCode) { isDownloaded ->
+            if (isDownloaded) {
+                Log.d(TAG, "Model already available: $langCode")
                 onComplete(true)
+                return@isModelDownloaded
             }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Model download failed for $langCode: ${e.message}")
-                onComplete(false)
-            }
+            
+            Log.d(TAG, "Background download started for: $langCode")
+            val model = TranslateRemoteModel.Builder(langCode).build()
+            val conditions = DownloadConditions.Builder().build() // Allow cellular
+
+            modelManager.download(model, conditions)
+                .addOnSuccessListener {
+                    Log.d(TAG, "Model download successful: $langCode")
+                    onComplete(true)
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Model download failed for $langCode: ${e.message}")
+                    onComplete(false)
+                }
+        }
     }
 
     /**
-     * Checks if a model is already downloaded.
+     * Checks if a model is already downloaded on this device for this app.
      */
     fun isModelDownloaded(langCode: String, callback: (Boolean) -> Unit) {
         val model = TranslateRemoteModel.Builder(langCode).build()

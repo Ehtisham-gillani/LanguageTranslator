@@ -5,13 +5,12 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
-import android.view.View
-import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityOptionsCompat
 import androidx.core.net.toUri
 import com.example.codevicklanguagetranslatorpro.data.TranslationRepository
 import com.example.codevicklanguagetranslatorpro.databinding.ActivityMainBinding
@@ -87,8 +86,10 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, TextTranslationActivity::class.java)
             val currentText = binding.etInput.text.toString()
             intent.putExtra("EXTRA_TEXT", currentText)
-            startActivity(intent)
-            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+            val options = ActivityOptionsCompat.makeCustomAnimation(
+                this, android.R.anim.fade_in, android.R.anim.fade_out
+            )
+            startActivity(intent, options.toBundle())
         }
 
         binding.cardInput.setOnClickListener { openTextTranslation() }
