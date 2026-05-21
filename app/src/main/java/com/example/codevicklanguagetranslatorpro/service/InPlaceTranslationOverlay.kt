@@ -36,6 +36,7 @@ class InPlaceTranslationOverlay @JvmOverloads constructor(
 
     /** Set true to draw red boxes at original node bounds (alignment check) */
     var debugMode = false
+    var chatMode = false
 
     /** Real physical display size — set by BubbleOverlayService before addView */
     var realDisplayWidth  = 0
@@ -65,13 +66,14 @@ class InPlaceTranslationOverlay @JvmOverloads constructor(
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         style = Paint.Style.FILL
-        setShadowLayer(6f, 0f, 2f, Color.argb(50, 0, 0, 0))
+        setShadowLayer(2f, 0f, 1f, Color.argb(22, 0, 0, 0))
     }
 
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = "#6366F1".toColorInt()
+        color = "#D1D5DB".toColorInt()
         style = Paint.Style.STROKE
-        strokeWidth = 1.8f
+        strokeWidth = 0.8f
+        alpha = 120
     }
 
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -167,34 +169,39 @@ class InPlaceTranslationOverlay @JvmOverloads constructor(
                 continue   // skip translation render in debug mode
             }
 
+            if (chatMode) {
+                drawChatTranslation(canvas, item.text, left, top, right, bottom, nodeW, nodeH)
+                continue
+            }
+
             // ── 1. MASK — erase original text completely ──────────────────
             // Extend 1px on all sides to cover sub-pixel rendering bleed
             canvas.drawRect(left - 1f, top - 1f, right + 1f, bottom + 1f, maskPaint)
 
             // ── 2. Font size — fit translated text into node height ────────
             //    Start at 78% of node height, shrink if it overflows
-            var fontSize = (nodeH * 0.78f).coerceIn(11f, 42f)
+            var fontSize = (nodeH * 0.72f).coerceIn(10f, 26f)
             textPaint.textSize = fontSize
 
             // Layout width: allow up to full screen width so text isn't clipped
             // but anchor it to start at same x as original node
             val availableRight = width.toFloat()
             val layoutMaxW = (availableRight - left).toInt().coerceAtLeast(80)
-            var layout = buildLayout(item.text, min(layoutMaxW, (nodeW * 2f).toInt().coerceAtLeast(100)))
+            var layout = buildLayout(item.text, min(layoutMaxW, (nodeW * 1.35f).toInt().coerceAtLeast(100)))
 
             var tries = 0
             while (layout.height > nodeH * 1.5f && fontSize > 10f && tries < 6) {
                 fontSize *= 0.82f
                 textPaint.textSize = fontSize
-                layout = buildLayout(item.text, min(layoutMaxW, (nodeW * 2f).toInt().coerceAtLeast(100)))
+                layout = buildLayout(item.text, min(layoutMaxW, (nodeW * 1.35f).toInt().coerceAtLeast(100)))
                 tries++
             }
 
             // ── 3. Box dimensions ─────────────────────────────────────────
             // Width: at least original node width, expand right if text is longer
             // Height: at least original node height
-            val hPad = (fontSize * 0.25f).coerceAtLeast(4f)
-            val vPad = (fontSize * 0.12f).coerceAtLeast(3f)
+            val hPad = (fontSize * 0.2f).coerceAtLeast(3f)
+            val vPad = (fontSize * 0.08f).coerceAtLeast(2f)
 
             val boxW = max(layout.width.toFloat() + hPad * 2f, nodeW)
             val boxH = max(layout.height.toFloat() + vPad * 2f, nodeH)
@@ -223,13 +230,66 @@ class InPlaceTranslationOverlay @JvmOverloads constructor(
         }
     }
 
-    private fun buildLayout(text: String, maxWidth: Int): StaticLayout =
+    private fun drawChatTranslation(
+        canvas: Canvas,
+        text: String,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        nodeW: Float,
+        nodeH: Float
+    ) {
+        val fontSize = (nodeH * 0.3f).coerceIn(13f, 16f)
+
+        val isOutgoing = left > width * 0.35f
+        textPaint.color = if (isOutgoing) "#166534".toColorInt() else "#0F766E".toColorInt()
+        textPaint.textSize = fontSize
+        textPaint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        textPaint.setShadowLayer(5f, 0f, 1.5f, Color.WHITE)
+
+        val maxTextWidth = min(width - 48, max(170, (nodeW * 0.9f).toInt())).coerceAtLeast(120)
+        val maxLines = when {
+            nodeH > 260f -> 4
+            nodeH > 140f -> 3
+            else -> 2
+        }
+        val layout = buildLayout(text, maxTextWidth, maxLines = maxLines)
+        val textW = layout.width.toFloat()
+        val textH = layout.height.toFloat()
+
+        val textLeft = if (isOutgoing) {
+            (right - textW - 18f).coerceIn(16f, width - textW - 16f)
+        } else {
+            (left + 18f).coerceIn(16f, width - textW - 16f)
+        }
+
+        val safeBottom = height - 150f
+        val textTop = if (nodeH > 120f) {
+            (top + min(42f, nodeH * 0.14f)).coerceIn(top + 8f, safeBottom - textH)
+        } else {
+            val preferredTop = bottom + 4f
+            if (preferredTop + textH <= safeBottom) {
+                preferredTop
+            } else {
+                (top - textH - 4f).coerceAtLeast(8f)
+            }
+        }
+
+        canvas.withTranslation(textLeft, textTop) {
+            layout.draw(this)
+        }
+        textPaint.clearShadowLayer()
+        textPaint.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+    }
+
+    private fun buildLayout(text: String, maxWidth: Int, maxLines: Int = 6): StaticLayout =
         StaticLayout.Builder
             .obtain(text, 0, text.length, textPaint, maxWidth.coerceAtLeast(10))
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)   // left-aligned like reference
             .setLineSpacing(1f, 1.0f)
             .setIncludePad(false)
-            .setMaxLines(6)
+            .setMaxLines(maxLines)
             .setEllipsize(TextUtils.TruncateAt.END)
             .build()
 }

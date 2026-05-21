@@ -64,6 +64,11 @@ class TranslationRepository {
         onError: (Exception) -> Unit
     ) {
         Log.d(TAG, "Request: '$text' ($sourceLang -> $targetLang)")
+
+        if (sourceLang == targetLang) {
+            onSuccess(text)
+            return
+        }
         
         val needsNewClient = translator == null || lastSource != sourceLang || lastTarget != targetLang
         

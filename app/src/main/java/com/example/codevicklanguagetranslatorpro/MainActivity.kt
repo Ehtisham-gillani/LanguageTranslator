@@ -5,6 +5,8 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,7 +19,6 @@ import com.example.codevicklanguagetranslatorpro.databinding.ActivityMainBinding
 import com.example.codevicklanguagetranslatorpro.service.BubbleOverlayService
 import com.example.codevicklanguagetranslatorpro.service.ScreenTextService
 import com.example.codevicklanguagetranslatorpro.ui.TranslationViewModel
-import com.google.mlkit.nl.translate.TranslateLanguage
 
 class MainActivity : AppCompatActivity() {
 
@@ -49,13 +50,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun downloadAllModels() {
-        val allLangs = listOf(
-            TranslateLanguage.ENGLISH, TranslateLanguage.SPANISH, 
-            TranslateLanguage.FRENCH, TranslateLanguage.GERMAN, 
-            TranslateLanguage.URDU, TranslateLanguage.ARABIC, 
-            TranslateLanguage.HINDI
-        )
-        allLangs.forEach { repository.downloadModel(it) }
+        val source = LanguageOptions.defaultSource(this)
+        val target = LanguageOptions.defaultTarget(this)
+        repository.downloadModel(source)
+        repository.downloadModel(target)
     }
 
     override fun onResume() {
@@ -70,15 +68,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSpinners() {
-        val languages = listOf("EN", "ES", "FR", "DE", "UR", "AR", "HI")
-        val adapter = ArrayAdapter(this, R.layout.spinner_item, languages)
+        val adapter = ArrayAdapter(this, R.layout.spinner_item, LanguageOptions.labels)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         
         binding.spinnerSource.adapter = adapter
         binding.spinnerTarget.adapter = adapter
         
-        binding.spinnerSource.setSelection(0)
-        binding.spinnerTarget.setSelection(4) // UR
+        binding.spinnerSource.setSelection(indexForCode(LanguageOptions.defaultSource(this)))
+        binding.spinnerTarget.setSelection(indexForCode(LanguageOptions.defaultTarget(this)))
+
+        val saveSelectionListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveSelectedLanguages()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        binding.spinnerSource.onItemSelectedListener = saveSelectionListener
+        binding.spinnerTarget.onItemSelectedListener = saveSelectionListener
     }
 
     private fun setupListeners() {
@@ -102,6 +109,7 @@ class MainActivity : AppCompatActivity() {
             if (text.isNotEmpty()) {
                 val source = getLangCode(binding.spinnerSource.selectedItem.toString())
                 val target = getLangCode(binding.spinnerTarget.selectedItem.toString())
+                saveSelectedLanguages()
                 viewModel.translate(text, source, target)
             } else {
                 openTextTranslation()
@@ -136,22 +144,24 @@ class MainActivity : AppCompatActivity() {
     private fun observeViewModel() {
         viewModel.translatedText.observe(this) { result ->
             if (result.isNotEmpty()) {
-                binding.etInput.setText(result)
+                binding.tvOutput.text = result
+                Toast.makeText(this, result, Toast.LENGTH_LONG).show()
             }
+        }
+        viewModel.error.observe(this) { message ->
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun getLangCode(lang: String): String {
-        return when (lang) {
-            "EN" -> TranslateLanguage.ENGLISH
-            "ES" -> TranslateLanguage.SPANISH
-            "FR" -> TranslateLanguage.FRENCH
-            "DE" -> TranslateLanguage.GERMAN
-            "UR" -> TranslateLanguage.URDU
-            "AR" -> TranslateLanguage.ARABIC
-            "HI" -> TranslateLanguage.HINDI
-            else -> TranslateLanguage.ENGLISH
-        }
+    private fun getLangCode(lang: String): String = LanguageOptions.codeForLabel(lang)
+
+    private fun indexForCode(code: String): Int =
+        LanguageOptions.all.indexOfFirst { it.code == code }.takeIf { it >= 0 } ?: 0
+
+    private fun saveSelectedLanguages() {
+        val source = getLangCode(binding.spinnerSource.selectedItem.toString())
+        val target = getLangCode(binding.spinnerTarget.selectedItem.toString())
+        LanguageOptions.save(this, source, target)
     }
 
     private fun checkOverlayPermission() {

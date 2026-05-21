@@ -5,12 +5,12 @@
     android:layout_height="wrap_content">
 
     <com.google.android.material.card.MaterialCardView
+        xmlns:app="http://schemas.android.com/apk/res-auto"
         android:layout_width="56dp"
         android:layout_height="56dp"
         app:cardCornerRadius="28dp"
         app:cardElevation="8dp"
-        app:strokeWidth="0dp"
-        xmlns:app="http://schemas.android.com/apk/res-auto">
+        app:strokeWidth="0dp">
 
         <ImageView
             android:id="@+id/ivBubble"
@@ -20,7 +20,5 @@
             android:padding="14dp"
             android:src="@android:drawable/ic_menu_sort_alphabetically"
             app:tint="#FFFFFF" />
-
     </com.google.android.material.card.MaterialCardView>
-
 </FrameLayout>

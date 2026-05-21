@@ -14,10 +14,18 @@ class TranslationViewModel : ViewModel() {
 
     private val _error = MutableLiveData<String>()
     val error: LiveData<String> = _error
+    private var activeRequestId = 0
 
     fun translate(text: String, sourceLang: String, targetLang: String) {
+        val requestId = ++activeRequestId
+
         if (text.isBlank()) {
             _error.value = "Please enter text"
+            return
+        }
+
+        if (sourceLang == targetLang) {
+            _translatedText.value = text
             return
         }
 
@@ -26,10 +34,14 @@ class TranslationViewModel : ViewModel() {
             sourceLang,
             targetLang,
             onSuccess = { result ->
-                _translatedText.postValue(result)
+                if (requestId == activeRequestId) {
+                    _translatedText.postValue(result)
+                }
             },
             onError = { exception ->
-                _error.postValue(exception.message ?: "Translation failed")
+                if (requestId == activeRequestId) {
+                    _error.postValue(exception.message ?: "Translation failed")
+                }
             }
         )
     }

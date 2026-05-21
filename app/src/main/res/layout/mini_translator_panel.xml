@@ -21,11 +21,12 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:background="?attr/selectableItemBackground"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
             android:clickable="true"
             android:focusable="true"
-            android:orientation="horizontal">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -33,6 +34,7 @@
                 android:padding="6dp"
                 android:src="@android:drawable/ic_menu_crop"
                 app:tint="#FFFFFF" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -49,11 +51,12 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:background="?attr/selectableItemBackground"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
             android:clickable="true"
             android:focusable="true"
-            android:orientation="horizontal">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -61,11 +64,43 @@
                 android:padding="6dp"
                 android:src="@android:drawable/ic_menu_view"
                 app:tint="#FFFFFF" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:text="Fullscreen"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Chat Translation -->
+        <LinearLayout
+            android:id="@+id/btnChatTranslate"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="@drawable/circle_dark_bg"
+                android:padding="6dp"
+                android:src="@android:drawable/stat_notify_chat"
+                app:tint="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/tvChatTranslate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:text="Chat translation on"
                 android:textColor="#FFFFFF"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -77,9 +112,12 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
             android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -87,18 +125,28 @@
                 android:padding="6dp"
                 android:src="@android:drawable/ic_menu_mapmode"
                 app:tint="#FFFFFF" />
+
             <TextView
                 android:id="@+id/tvLangDisplay"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
-                android:text="AUTO → UR"
+                android:text="EN -> UR"
                 android:textColor="#AAAAAA"
                 android:textSize="14sp" />
 
-            <!-- Hidden elements for logic -->
-            <Spinner android:id="@+id/spinnerSourceBubble" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-            <Spinner android:id="@+id/spinnerTargetBubble" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+            <!-- Hidden elements kept for binding compatibility -->
+            <Spinner
+                android:id="@+id/spinnerSourceBubble"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <Spinner
+                android:id="@+id/spinnerTargetBubble"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <View
@@ -114,11 +162,12 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:background="?attr/selectableItemBackground"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
             android:clickable="true"
             android:focusable="true"
-            android:orientation="horizontal">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
             <ImageView
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -126,6 +175,7 @@
                 android:padding="6dp"
                 android:src="@android:drawable/ic_menu_close_clear_cancel"
                 app:tint="#FFFFFF" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -136,12 +186,36 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Hidden Compatibility fields -->
-        <Button android:id="@+id/btnScanScreen" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-        <EditText android:id="@+id/etBubbleInput" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-        <Button android:id="@+id/btnBubbleTranslate" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-        <TextView android:id="@+id/tvBubbleOutput" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-        <Button android:id="@+id/btnStopService" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+        <!-- Hidden compatibility fields -->
+        <Button
+            android:id="@+id/btnScanScreen"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
 
+        <EditText
+            android:id="@+id/etBubbleInput"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btnBubbleTranslate"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvBubbleOutput"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone"
+            tools:ignore="SmallSp" />
+
+        <Button
+            android:id="@+id/btnStopService"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

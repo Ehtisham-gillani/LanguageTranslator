@@ -5,8 +5,10 @@ import android.annotation.SuppressLint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.util.Log
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.CopyOnWriteArraySet
 
 data class TextElement(val text: String, val bounds: Rect)
 
@@ -16,6 +18,15 @@ class ScreenTextService : AccessibilityService() {
     companion object {
         private const val TAG = "ScreenTextService"
         private val instance = AtomicReference<ScreenTextService?>()
+        private val screenChangeListeners = CopyOnWriteArraySet<() -> Unit>()
+
+        fun addScreenChangeListener(listener: () -> Unit) {
+            screenChangeListeners.add(listener)
+        }
+
+        fun removeScreenChangeListener(listener: () -> Unit) {
+            screenChangeListeners.remove(listener)
+        }
 
         fun getTextElementsFromScreen(cropRect: RectF? = null): List<TextElement> {
             val service = instance.get() ?: run {
@@ -40,7 +51,7 @@ class ScreenTextService : AccessibilityService() {
             Log.d(TAG, "Raw nodes: ${raw.size}")
             raw.forEach { Log.d(TAG, "  [${it.bounds.left},${it.bounds.top},${it.bounds.right},${it.bounds.bottom}] \"${it.text.take(30)}\"") }
 
-            val deduped = removeSupersets(raw)
+            val deduped = removeNoisyNodes(raw)
             Log.d(TAG, "After dedup: ${deduped.size}")
             return deduped
         }
@@ -109,13 +120,31 @@ class ScreenTextService : AccessibilityService() {
          *
          * Also remove near-duplicates: same text, center within 8px of another.
          */
-        private fun removeSupersets(elements: List<TextElement>): List<TextElement> {
+        private fun removeNoisyNodes(elements: List<TextElement>): List<TextElement> {
             if (elements.size <= 1) return elements
+
+            val withoutContainers = elements.filterNot { candidate ->
+                val childrenInside = elements.filter { other ->
+                    other !== candidate &&
+                            candidate.bounds.contains(other.bounds) &&
+                            candidate.bounds != other.bounds
+                }
+
+                if (childrenInside.size < 2) return@filterNot false
+
+                val candidateText = normalizeForComparison(candidate.text)
+                val matchingChildren = childrenInside.count { child ->
+                    val childText = normalizeForComparison(child.text)
+                    childText.length >= 3 && candidateText.contains(childText)
+                }
+
+                matchingChildren >= 2
+            }
 
             val kept = mutableListOf<TextElement>()
 
-            outer@ for (candidate in elements) {
-                for (other in elements) {
+            outer@ for (candidate in withoutContainers) {
+                for (other in withoutContainers) {
                     if (other === candidate) continue
                     if (other.text == candidate.text && candidate.bounds.contains(other.bounds)) {
                         // candidate is larger — skip it, keep the smaller 'other'
@@ -133,6 +162,11 @@ class ScreenTextService : AccessibilityService() {
             }
         }
 
+        private fun normalizeForComparison(text: String): String =
+            text.lowercase()
+                .replace(Regex("\\s+"), " ")
+                .trim()
+
         fun getTextFromScreen(cropRect: RectF? = null): String =
             getTextElementsFromScreen(cropRect).joinToString("\n") { it.text }
     }
@@ -143,7 +177,17 @@ class ScreenTextService : AccessibilityService() {
         instance.set(this)
     }
 
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        when (event?.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED,
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                screenChangeListeners.forEach { it.invoke() }
+            }
+        }
+    }
     override fun onInterrupt() { instance.set(null) }
     override fun onDestroy() { super.onDestroy(); instance.set(null) }
 }
